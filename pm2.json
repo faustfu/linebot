@@ -1,0 +1,16 @@
+{
+  "apps" : [
+    {
+      "name": "line",
+      "script": "app.js",
+      "watch": ["app.js", "config"],
+      "ignore_watch": ["public"],
+      "watch_options": {
+        "ignored": ".*"
+      },
+      "env": {
+        "NODE_PATH": "."
+      }
+    }
+  ]
+}
