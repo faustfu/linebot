@@ -1,5 +1,12 @@
 const fs = require('fs')
 const path = require('path')
+var https = require('https');
+var axios = require('axios');
+var httpClient = axios.create({
+  httpsAgent: new https.Agent({  
+    rejectUnauthorized: true
+  })
+});
 
 const linebot = require('linebot');
 
@@ -11,12 +18,14 @@ const savePath = './save', noteName = 'note.txt', EOL = '\r\n', encoding = 'utf8
   MSG_TYPE = {
     TEXT: 'text',
     IMAGE: 'image',
+    LOCATION: 'location',
   },
   cmdList = [
     '讀 [第幾項]',
     '存 內容',
     '刪 [第幾項]',
     '查 id',
+    '地 [地址]',
   ];
 
 const bot = linebot({
@@ -60,12 +69,12 @@ function processImage(event, userImageDirectory) {
 }
 
 function processText(event, noteFileName) {
-  const msgText = event.message.text, replyText = { type: MSG_TYPE.TEXT, text: msgText };
+  const msgText = event.message.text.toLowerCase(), replyText = { type: MSG_TYPE.TEXT, text: msgText };
 
   if (msgText === 'hi') {
     replyText.text = cmdList.join(EOL);
 
-    console.log('replyText', replyText)
+    //console.log('replyText', replyText)
     return event.reply(replyText).then(normalBack).catch(catchError);
   }
 
@@ -138,7 +147,36 @@ function processText(event, noteFileName) {
     return event.reply(replyText).then(normalBack).catch(catchError);
   }
 
-  return event.reply(replyText).then(normalBack).catch(catchError);
+  const addressData = msgText.match(/^地 (.*)$/);
+  
+  if (addressData && addressData.length > 1) {
+    const address = encodeURIComponent(addressData[1].trim());
+    const queryURL = 'https://maps.googleapis.com/maps/api/place/textsearch/json?query=' + address + '&key=' + env.googleAPIKey;
+
+    return httpClient({ url: queryURL}).then(function(res) {
+      if (res && res.status === 200 && res.data && res.data.status === 'OK' && res.data.results && res.data.results.length > 0) {
+        //console.log('Call google api ok, results=', res.data.results);
+        const location = res.data.results[0], reply = {
+          type: MSG_TYPE.LOCATION,
+          title: '目標地點',
+          address: location.formatted_address,
+          latitude: location.geometry.location.lat,
+          longitude: location.geometry.location.lng,
+        };
+
+        //console.log('Call google api ok, reply=', reply);
+        return event.reply(reply).then(normalBack).catch(catchError);
+      } else {
+        console.log('Call google api failed, data=', res);
+        replyText.text = '找不到喔';
+
+        //console.log('replyText', replyText)
+        return event.reply(replyText).then(normalBack).catch(catchError);
+      }
+    }).catch(catchError);
+  }
+  
+  // return event.reply(replyText).then(normalBack).catch(catchError);
 }
 
 ////
